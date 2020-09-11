@@ -528,6 +528,15 @@ web3._extend({
 			params: 3,
 			inputFormatter: [web3._extend.formatters.inputAddressFormatter, null, web3._extend.formatters.inputBlockNumberFormatter]
 		}),
+		new web3._extend.Method({
+			name: 'getTrieSize',
+			call: function(args) {
+				return (web3._extend.utils.isString(args[0]) && args[0].indexOf('0x') === 0) ? 'eth_getTrieSizeByHash' : 'eth_getTrieSizeByNumber';
+			},
+			params: 1,
+			inputFormatter: [web3._extend.formatters.inputBlockNumberFormatter],
+			outputFormatter: web3._extend.uint64
+		}),
 	],
 	properties: [
 		new web3._extend.Property({

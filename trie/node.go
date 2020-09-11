@@ -20,8 +20,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
+	"runtime"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/ethdb"
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
@@ -222,4 +225,68 @@ func wrapError(err error, ctx string) error {
 
 func (err *decodeError) Error() string {
 	return fmt.Sprintf("%v (decode path: %s)", err.what, strings.Join(err.stack, "<-"))
+}
+
+func TrieSize(db ethdb.KeyValueReader, buf []byte) uint64 {
+	runtime.GOMAXPROCS(runtime.NumCPU())
+	//fmt.Println(runtime.GOMAXPROCS(0))
+	wait := new(sync.WaitGroup)
+	wait.Add(16)
+
+	data, _ := db.Get(buf)
+	if len(data) == 0 {
+		fmt.Printf("%x\n", buf)
+		return 0
+	}
+	size := uint64(len(buf) + len(data))
+	node := mustDecodeNode(buf, data)
+	var hash []byte
+	var childSize [16]uint64
+	n, _ := node.(*fullNode)
+	for i, child := range &n.Children {
+		if i < 16 {
+			hash, _ = child.(hashNode)
+			go func(db ethdb.KeyValueReader, buf []byte, size *uint64, w *sync.WaitGroup) {
+				defer w.Done()
+				*size = trieSize(db, buf)
+			}(db, hash, &childSize[i], wait)
+		}
+	}
+
+	wait.Wait()
+
+	for i := 0; i < 16; i++ {
+		size += childSize[i]
+	}
+	return size
+} 
+
+func trieSize(db ethdb.KeyValueReader, buf []byte) uint64 {
+	data, _ := db.Get(buf)
+	if len(data) == 0 {
+		return 0
+	}
+	size := uint64(len(buf) + len(data))
+	node := mustDecodeNode(buf, data)
+	
+	switch n := node.(type) {
+	case *fullNode:
+		var hash []byte
+		for _, child := range &n.Children {
+			if child != nil {
+				hash, _ = child.(hashNode)
+				size += trieSize(db, hash)
+			}
+		}
+	case *shortNode:
+		switch val := n.Val.(type) {
+		case hashNode:
+			//fmt.Println("hash")
+			size += trieSize(db, val)
+		default:
+		}
+	default:
+		fmt.Println("gg")
+	}
+	return size
 }

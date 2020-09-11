@@ -44,6 +44,7 @@ import (
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/ethereum/go-ethereum/trie"
 	"github.com/tyler-smith/go-bip39"
 )
 
@@ -709,6 +710,22 @@ func (s *PublicBlockChainAPI) GetUncleCountByBlockHash(ctx context.Context, bloc
 		return &n
 	}
 	return nil
+}
+
+func (s *PublicBlockChainAPI) GetTrieSizeByNumber(ctx context.Context, blockNr rpc.BlockNumber) uint64 {
+	if block, _ := s.b.BlockByNumber(ctx, blockNr); block != nil {
+		size := trie.TrieSize(s.b.ChainDb(), (block.Header().Root)[:])
+		return size
+	}
+	return 0
+}
+
+func (s *PublicBlockChainAPI) GetTrieSizeByHash(ctx context.Context, blockHash common.Hash) uint64 {
+	if block, _ := s.b.BlockByHash(ctx, blockHash); block != nil {
+		size := trie.TrieSize(s.b.ChainDb(), (block.Header().Root)[:])
+		return size
+	}
+	return 0
 }
 
 // GetCode returns the code stored at the given address in the state for the given block number.
